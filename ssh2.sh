@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SSH Connection Optimizer for Ubuntu 24.04
+# Enhanced SSH Connection Optimizer for Ubuntu 24.04
 # This script optimizes SSH connections using various techniques and tools
 
 # Error handling
@@ -39,7 +39,7 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo -e "${GREEN}Starting SSH Connection Optimizer...${NC}"
+echo -e "${GREEN}Starting Enhanced SSH Connection Optimizer...${NC}"
 
 # Update package lists
 echo -e "${YELLOW}Updating package lists...${NC}"
@@ -104,7 +104,7 @@ if [ -f /etc/ssh/sshd_config ]; then
     cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 fi
 
-# Optimize SSH configuration
+# Optimize SSH configuration with enhanced settings
 cat > /etc/ssh/sshd_config << 'EOL'
 # Performance optimizations
 Port 22
@@ -120,7 +120,7 @@ AuthorizedKeysFile .ssh/authorized_keys
 PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 
-# Performance settings
+# Enhanced Performance settings
 Compression yes
 TCPKeepAlive yes
 ClientAliveInterval 60
@@ -128,6 +128,11 @@ ClientAliveCountMax 3
 UseDNS no
 GSSAPIAuthentication no
 UsePAM yes
+MaxSessions 100
+IPQoS lowdelay throughput
+
+# Use faster ed25519 keys
+HostKey /etc/ssh/ssh_host_ed25519_key
 
 # Security settings
 X11Forwarding no
@@ -140,7 +145,7 @@ SyslogFacility AUTH
 LogLevel INFO
 EOL
 
-# Optimize system network settings
+# Enhanced system network settings
 cat > /etc/sysctl.d/99-ssh-optimize.conf << 'EOL'
 # TCP optimizations
 net.ipv4.tcp_fin_timeout = 30
@@ -154,7 +159,16 @@ net.core.wmem_max = 16777216
 net.ipv4.tcp_rmem = 4096 87380 16777216
 net.ipv4.tcp_wmem = 4096 65536 16777216
 
-# Enable BBR congestion control if available
+# Enhanced network optimizations
+net.core.netdev_max_backlog = 16384
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_mem = 16777216 16777216 16777216
+net.ipv4.tcp_max_tw_buckets = 1440000
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_fastopen = 3
+
+# Enable BBR congestion control
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOL
@@ -162,7 +176,15 @@ EOL
 # Apply sysctl changes
 sysctl --system
 
-# Create SSH optimization script
+# Configure system resource limits
+cat > /etc/security/limits.d/ssh-optimizer.conf << 'EOL'
+* soft nofile 1000000
+* hard nofile 1000000
+* soft nproc 65535
+* hard nproc 65535
+EOL
+
+# Create SSH optimization script with enhanced features
 cat > /usr/local/bin/ssh-optimizer.py << 'EOL'
 #!/opt/ssh-optimizer-env/bin/python3
 import sys
@@ -182,7 +204,11 @@ def optimize_connection(host):
         interfaces = psutil.net_if_stats()
         for interface in interfaces:
             if interfaces[interface].isup:
+                # Set MTU to 9000 for jumbo frames
                 subprocess.run(['ip', 'link', 'set', 'dev', interface, 'mtu', '9000'])
+                # Optimize NIC settings
+                subprocess.run(['ethtool', '-G', interface, 'rx', '4096', 'tx', '4096'])
+                subprocess.run(['ethtool', '-K', interface, 'tso', 'on', 'gso', 'on', 'gro', 'on'])
         
         # Log optimization results
         with open('/var/log/ssh-optimizer.log', 'a') as f:
@@ -199,7 +225,7 @@ EOL
 
 chmod +x /usr/local/bin/ssh-optimizer.py
 
-# Create SSH connection wrapper script
+# Create enhanced SSH connection wrapper script
 cat > /usr/local/bin/smart-ssh << 'EOL'
 #!/bin/bash
 
@@ -237,6 +263,13 @@ EOL
 
 chmod +x /usr/local/bin/smart-ssh
 
+# Create systemd service optimization
+cat > /etc/systemd/system/ssh.service.d/override.conf << 'EOL'
+[Service]
+LimitNOFILE=1000000
+CPUSchedulingPolicy=batch
+EOL
+
 # Create log files with proper permissions
 touch /var/log/ssh-optimizer.log
 chmod 644 /var/log/ssh-optimizer.log
@@ -247,9 +280,11 @@ chmod 600 /etc/ssh/sshd_config
 # Detect and restart the correct SSH service
 if systemctl list-unit-files | grep -q ssh.service; then
     echo -e "${YELLOW}Restarting ssh.service...${NC}"
+    systemctl daemon-reload
     systemctl restart ssh.service
 elif systemctl list-unit-files | grep -q sshd.service; then
     echo -e "${YELLOW}Restarting sshd.service...${NC}"
+    systemctl daemon-reload
     systemctl restart sshd.service
 else
     echo -e "${RED}SSH service not found. Attempting to install...${NC}"
@@ -268,13 +303,15 @@ else
     echo -e "${YELLOW}You can manually start it with: sudo systemctl start ssh.service${NC}"
 fi
 
-echo -e "${GREEN}SSH optimization complete!${NC}"
+echo -e "${GREEN}Enhanced SSH optimization complete!${NC}"
 echo -e "${YELLOW}Usage:${NC}"
 echo -e "  smart-ssh hostname [ssh options]"
 echo -e "${YELLOW}Logs:${NC}"
 echo -e "  - SSH Optimizer: /var/log/ssh-optimizer.log"
 echo -e "${YELLOW}Note:${NC}"
 echo -e "  - Python virtual environment is located at: ${VENV_PATH}"
+echo -e "  - System resource limits have been optimized"
+echo -e "  - Network interface settings have been enhanced"
 echo -e "  - A system reboot is recommended to apply all optimizations"
 
 # Check if SSH is accessible
