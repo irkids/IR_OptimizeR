@@ -243,7 +243,30 @@ chmod 644 /var/log/ssh-optimizer.log
 
 # Final setup and permissions
 chmod 600 /etc/ssh/sshd_config
-systemctl restart sshd
+
+# Detect and restart the correct SSH service
+if systemctl list-unit-files | grep -q ssh.service; then
+    echo -e "${YELLOW}Restarting ssh.service...${NC}"
+    systemctl restart ssh.service
+elif systemctl list-unit-files | grep -q sshd.service; then
+    echo -e "${YELLOW}Restarting sshd.service...${NC}"
+    systemctl restart sshd.service
+else
+    echo -e "${RED}SSH service not found. Attempting to install...${NC}"
+    apt-get install -y openssh-server
+    systemctl enable ssh.service
+    systemctl restart ssh.service
+fi
+
+# Verify SSH service status
+if systemctl is-active ssh.service >/dev/null 2>&1; then
+    echo -e "${GREEN}SSH service is running.${NC}"
+elif systemctl is-active sshd.service >/dev/null 2>&1; then
+    echo -e "${GREEN}SSH service is running.${NC}"
+else
+    echo -e "${RED}Warning: SSH service is not running. Please check your SSH configuration.${NC}"
+    echo -e "${YELLOW}You can manually start it with: sudo systemctl start ssh.service${NC}"
+fi
 
 echo -e "${GREEN}SSH optimization complete!${NC}"
 echo -e "${YELLOW}Usage:${NC}"
@@ -253,3 +276,11 @@ echo -e "  - SSH Optimizer: /var/log/ssh-optimizer.log"
 echo -e "${YELLOW}Note:${NC}"
 echo -e "  - Python virtual environment is located at: ${VENV_PATH}"
 echo -e "  - A system reboot is recommended to apply all optimizations"
+
+# Check if SSH is accessible
+if ! ss -tlnp | grep -q ':22'; then
+    echo -e "${RED}Warning: SSH port (22) is not listening. You may need to:${NC}"
+    echo -e "1. Check if SSH server is installed: ${YELLOW}sudo apt-get install openssh-server${NC}"
+    echo -e "2. Start SSH service: ${YELLOW}sudo systemctl start ssh${NC}"
+    echo -e "3. Enable SSH service: ${YELLOW}sudo systemctl enable ssh${NC}"
+fi
