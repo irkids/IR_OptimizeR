@@ -21,87 +21,52 @@ fi
 
 echo -e "${GREEN}Starting SSH Connection Optimizer...${NC}"
 
-# Function to handle package installation with error checking
-install_package() {
-    local package=$1
-    echo -e "${YELLOW}Installing $package...${NC}"
-    if ! apt-get install -y "$package"; then
-        echo -e "${RED}Failed to install $package${NC}"
-        return 1
-    fi
-    return 0
-}
-
-# Update package lists
-echo -e "${YELLOW}Updating package lists...${NC}"
+# Install system prerequisites
+echo -e "${YELLOW}Installing system prerequisites...${NC}"
 apt-get update
+apt-get install -y \
+    python3-full \
+    python3-venv \
+    pipx \
+    nodejs \
+    npm \
+    mosh \
+    netcat \
+    iperf3 \
+    ethtool \
+    sysstat \
+    tcptraceroute \
+    hping3 \
+    python3-paramiko \
+    python3-psutil \
+    python3-numpy \
+    python3-pandas
 
-# Install prerequisites with error handling
-echo -e "${YELLOW}Installing prerequisites...${NC}"
-PACKAGES=(
-    python3
-    python3-pip
-    nodejs
-    npm
-    mosh
-    netcat-openbsd
-    iperf3
-    ethtool
-    sysstat
-    tcptraceroute
-)
+# Setup Python virtual environment
+echo -e "${YELLOW}Setting up Python virtual environment...${NC}"
+VENV_PATH="/opt/ssh-optimizer-env"
+python3 -m venv "$VENV_PATH"
 
-for package in "${PACKAGES[@]}"; do
-    install_package "$package" || {
-        echo -e "${RED}Failed to install some prerequisites. Exiting.${NC}"
-        exit 1
-    }
-done
-
-# Try to install hping3, but don't fail if it's not available
-if ! install_package hping3; then
-    echo -e "${YELLOW}Warning: hping3 package not available. Continuing without it...${NC}"
-fi
-
-# Install Python packages with error handling
-echo -e "${YELLOW}Installing Python packages...${NC}"
-PYTHON_PACKAGES=(
-    paramiko
-    sshtunnel
-    psutil
-    numpy
+# Install Python packages in virtual environment
+echo -e "${YELLOW}Installing Python packages in virtual environment...${NC}"
+"$VENV_PATH/bin/pip" install \
+    paramiko \
+    sshtunnel \
+    psutil \
+    numpy \
     pandas
-)
 
-for package in "${PYTHON_PACKAGES[@]}"; do
-    echo -e "${YELLOW}Installing Python package: $package${NC}"
-    if ! pip3 install "$package"; then
-        echo -e "${RED}Failed to install Python package: $package${NC}"
-        exit 1
-    fi
-done
-
-# Install Node.js packages with error handling
+# Install Node.js packages
 echo -e "${YELLOW}Installing Node.js packages...${NC}"
-NODE_PACKAGES=(
-    ssh2
-    node-ssh
+npm install -g \
+    ssh2 \
+    node-ssh \
     net-ping
-)
 
-for package in "${NODE_PACKAGES[@]}"; do
-    echo -e "${YELLOW}Installing Node.js package: $package${NC}"
-    if ! npm install -g "$package"; then
-        echo -e "${RED}Failed to install Node.js package: $package${NC}"
-        exit 1
-    fi
-done
-
-# Rest of the script remains the same as before, starting from here:
 # Backup existing SSH config
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 
-# [Previous SSH config section remains the same]
+# Optimize SSH configuration
 cat >> /etc/ssh/sshd_config << 'EOL'
 # Performance optimizations
 Compression yes
@@ -122,7 +87,7 @@ MaxAuthTries 5
 LoginGraceTime 30
 EOL
 
-# [Previous sysctl optimizations remain the same]
+# Optimize system network settings
 cat >> /etc/sysctl.conf << 'EOL'
 # TCP optimizations
 net.ipv4.tcp_fin_timeout = 30
@@ -141,9 +106,9 @@ EOL
 # Apply sysctl changes
 sysctl -p
 
-# [Previous Python optimizer script remains the same]
+# Create SSH optimization script
 cat > /usr/local/bin/ssh-optimizer.py << 'EOL'
-#!/usr/bin/env python3
+#!/opt/ssh-optimizer-env/bin/python3
 import sys
 import psutil
 import numpy as np
@@ -174,7 +139,7 @@ EOL
 
 chmod +x /usr/local/bin/ssh-optimizer.py
 
-# [Previous SSH wrapper script remains the same]
+# Create SSH connection wrapper script
 cat > /usr/local/bin/smart-ssh << 'EOL'
 #!/bin/bash
 
@@ -209,7 +174,7 @@ EOL
 
 chmod +x /usr/local/bin/smart-ssh
 
-# [Previous systemd service and Node.js monitoring script remain the same]
+# Create systemd service for connection monitoring
 cat > /etc/systemd/system/ssh-monitor.service << 'EOL'
 [Unit]
 Description=SSH Connection Monitor
@@ -224,6 +189,7 @@ User=root
 WantedBy=multi-user.target
 EOL
 
+# Create Node.js monitoring script
 cat > /usr/local/bin/ssh-monitor.js << 'EOL'
 const ssh2 = require('ssh2');
 const ping = require('net-ping');
@@ -273,3 +239,6 @@ echo -e "  smart-ssh hostname [ssh options]"
 echo -e "${YELLOW}Logs:${NC}"
 echo -e "  - SSH Optimizer: /var/log/ssh-optimizer.log"
 echo -e "  - Connection Monitor: /var/log/ssh-monitor.log"
+echo -e "${YELLOW}Note:${NC}"
+echo -e "  - Python virtual environment is located at: ${VENV_PATH}"
+echo -e "  - A system reboot is recommended to apply all optimizations"
