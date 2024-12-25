@@ -104,7 +104,7 @@ if [ -f /etc/ssh/sshd_config ]; then
     cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 fi
 
-# Optimize SSH configuration with enhanced settings
+# Optimize SSH configuration with password authentication enabled
 cat > /etc/ssh/sshd_config << 'EOL'
 # Performance optimizations
 Port 22
@@ -113,8 +113,8 @@ ListenAddress 0.0.0.0
 Protocol 2
 
 # Authentication
-PermitRootLogin prohibit-password
-PasswordAuthentication no
+PermitRootLogin yes
+PasswordAuthentication yes
 PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys
 PermitEmptyPasswords no
@@ -130,9 +130,6 @@ GSSAPIAuthentication no
 UsePAM yes
 MaxSessions 100
 IPQoS lowdelay throughput
-
-# Use faster ed25519 keys
-HostKey /etc/ssh/ssh_host_ed25519_key
 
 # Security settings
 X11Forwarding no
