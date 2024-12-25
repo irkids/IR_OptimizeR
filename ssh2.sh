@@ -21,40 +21,87 @@ fi
 
 echo -e "${GREEN}Starting SSH Connection Optimizer...${NC}"
 
-# Install prerequisites
-echo -e "${YELLOW}Installing prerequisites...${NC}"
+# Function to handle package installation with error checking
+install_package() {
+    local package=$1
+    echo -e "${YELLOW}Installing $package...${NC}"
+    if ! apt-get install -y "$package"; then
+        echo -e "${RED}Failed to install $package${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# Update package lists
+echo -e "${YELLOW}Updating package lists...${NC}"
 apt-get update
-apt-get install -y \
-    python3 \
-    python3-pip \
-    nodejs \
-    npm \
-    mosh \
-    netcat \
-    iperf3 \
-    ethtool \
-    sysstat \
-    tcptraceroute \
-    hping3
 
-# Install Python packages
-pip3 install \
-    paramiko \
-    sshtunnel \
-    psutil \
-    numpy \
+# Install prerequisites with error handling
+echo -e "${YELLOW}Installing prerequisites...${NC}"
+PACKAGES=(
+    python3
+    python3-pip
+    nodejs
+    npm
+    mosh
+    netcat-openbsd
+    iperf3
+    ethtool
+    sysstat
+    tcptraceroute
+)
+
+for package in "${PACKAGES[@]}"; do
+    install_package "$package" || {
+        echo -e "${RED}Failed to install some prerequisites. Exiting.${NC}"
+        exit 1
+    }
+done
+
+# Try to install hping3, but don't fail if it's not available
+if ! install_package hping3; then
+    echo -e "${YELLOW}Warning: hping3 package not available. Continuing without it...${NC}"
+fi
+
+# Install Python packages with error handling
+echo -e "${YELLOW}Installing Python packages...${NC}"
+PYTHON_PACKAGES=(
+    paramiko
+    sshtunnel
+    psutil
+    numpy
     pandas
+)
 
-# Install Node.js packages
-npm install -g \
-    ssh2 \
-    node-ssh \
+for package in "${PYTHON_PACKAGES[@]}"; do
+    echo -e "${YELLOW}Installing Python package: $package${NC}"
+    if ! pip3 install "$package"; then
+        echo -e "${RED}Failed to install Python package: $package${NC}"
+        exit 1
+    fi
+done
+
+# Install Node.js packages with error handling
+echo -e "${YELLOW}Installing Node.js packages...${NC}"
+NODE_PACKAGES=(
+    ssh2
+    node-ssh
     net-ping
+)
 
+for package in "${NODE_PACKAGES[@]}"; do
+    echo -e "${YELLOW}Installing Node.js package: $package${NC}"
+    if ! npm install -g "$package"; then
+        echo -e "${RED}Failed to install Node.js package: $package${NC}"
+        exit 1
+    fi
+done
+
+# Rest of the script remains the same as before, starting from here:
 # Backup existing SSH config
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 
-# Optimize SSH configuration
+# [Previous SSH config section remains the same]
 cat >> /etc/ssh/sshd_config << 'EOL'
 # Performance optimizations
 Compression yes
@@ -75,7 +122,7 @@ MaxAuthTries 5
 LoginGraceTime 30
 EOL
 
-# Optimize system network settings
+# [Previous sysctl optimizations remain the same]
 cat >> /etc/sysctl.conf << 'EOL'
 # TCP optimizations
 net.ipv4.tcp_fin_timeout = 30
@@ -94,7 +141,7 @@ EOL
 # Apply sysctl changes
 sysctl -p
 
-# Create SSH optimization script
+# [Previous Python optimizer script remains the same]
 cat > /usr/local/bin/ssh-optimizer.py << 'EOL'
 #!/usr/bin/env python3
 import sys
@@ -127,7 +174,7 @@ EOL
 
 chmod +x /usr/local/bin/ssh-optimizer.py
 
-# Create SSH connection wrapper script
+# [Previous SSH wrapper script remains the same]
 cat > /usr/local/bin/smart-ssh << 'EOL'
 #!/bin/bash
 
@@ -162,7 +209,7 @@ EOL
 
 chmod +x /usr/local/bin/smart-ssh
 
-# Create systemd service for connection monitoring
+# [Previous systemd service and Node.js monitoring script remain the same]
 cat > /etc/systemd/system/ssh-monitor.service << 'EOL'
 [Unit]
 Description=SSH Connection Monitor
@@ -177,7 +224,6 @@ User=root
 WantedBy=multi-user.target
 EOL
 
-# Create Node.js monitoring script
 cat > /usr/local/bin/ssh-monitor.js << 'EOL'
 const ssh2 = require('ssh2');
 const ping = require('net-ping');
