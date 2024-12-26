@@ -86,7 +86,7 @@ setup_python_env() {
         numpy \
         pandas \
         scikit-learn \
-        tensorflow-lite \
+        tensorflow-cpu \
         pyroute2 \
         netaddr \
         pytest \
@@ -105,8 +105,8 @@ net.core.wmem_max = 67108864
 net.ipv4.tcp_rmem = 4096 87380 67108864
 net.ipv4.tcp_wmem = 4096 65536 67108864
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_congestion_control = bbr2
-net.core.default_qdisc = fq_pie
+net.ipv4.tcp_congestion_control = bbr
+net.core.default_qdisc = fq
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_notsent_lowat = 16384
@@ -245,31 +245,28 @@ class SSHMonitor:
         
         if metrics['memory_percent'] > 90:
             subprocess.run(['sync'])
-            subprocess.run(['echo', '3', '>', '/proc/sys/vm/drop_caches'], shell=True)
+            with open('/proc/sys/vm/drop_caches', 'w') as f:
+                f.write('3')
             
     def run(self):
         while True:
-            try:
-                metrics = self.collect_metrics()
-                df = pd.read_sql('SELECT * FROM performance_metrics', self.conn)
-                anomaly_score = self.detect_anomalies(df)
-                metrics['anomaly_score'] = anomaly_score
-                
-                cursor = self.conn.cursor()
-                cursor.execute('''
-                    INSERT INTO performance_metrics 
-                    VALUES (:timestamp, :cpu_percent, :memory_percent, 
-                            :network_latency, :connection_count, :anomaly_score)
-                ''', metrics)
-                self.conn.commit()
-                
-                if anomaly_score == -1:
-                    self.optimize_system(metrics)
-                
-                time.sleep(60)
-            except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {str(e)}")
-                time.sleep(60)  # Wait before retrying
+            metrics = self.collect_metrics()
+            df = pd.read_sql('SELECT * FROM performance_metrics', self.conn)
+            anomaly_score = self.detect_anomalies(df)
+            metrics['anomaly_score'] = anomaly_score
+            
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                INSERT INTO performance_metrics 
+                VALUES (:timestamp, :cpu_percent, :memory_percent, 
+                        :network_latency, :connection_count, :anomaly_score)
+            ''', metrics)
+            self.conn.commit()
+            
+            if anomaly_score == -1:
+                self.optimize_system(metrics)
+            
+            time.sleep(60)
 
 if __name__ == '__main__':
     monitor = SSHMonitor()
