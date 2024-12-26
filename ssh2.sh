@@ -245,27 +245,31 @@ class SSHMonitor:
         
         if metrics['memory_percent'] > 90:
             subprocess.run(['sync'])
-            subprocess.run(['echo', '3', '>', '/proc/sys/vm/drop_caches'])
+            subprocess.run(['echo', '3', '>', '/proc/sys/vm/drop_caches'], shell=True)
             
     def run(self):
         while True:
-            metrics = self.collect_metrics()
-            df = pd.read_sql('SELECT * FROM performance_metrics', self.conn)
-            anomaly_score = self.detect_anomalies(df)
-            metrics['anomaly_score'] = anomaly_score
-            
-            cursor = self.conn.cursor()
-            cursor.execute('''
-                INSERT INTO performance_metrics 
-                VALUES (:timestamp, :cpu_percent, :memory_percent, 
-                        :network_latency, :connection_count, :anomaly_score)
-            ''', metrics)
-            self.conn.commit()
-            
-            if anomaly_score == -1:
-                self.optimize_system(metrics)
-            
-            time.sleep(60)
+            try:
+                metrics = self.collect_metrics()
+                df = pd.read_sql('SELECT * FROM performance_metrics', self.conn)
+                anomaly_score = self.detect_anomalies(df)
+                metrics['anomaly_score'] = anomaly_score
+                
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                    INSERT INTO performance_metrics 
+                    VALUES (:timestamp, :cpu_percent, :memory_percent, 
+                            :network_latency, :connection_count, :anomaly_score)
+                ''', metrics)
+                self.conn.commit()
+                
+                if anomaly_score == -1:
+                    self.optimize_system(metrics)
+                
+                time.sleep(60)
+            except Exception as e:
+                self.logger.error(f"Error in monitoring loop: {str(e)}")
+                time.sleep(60)  # Wait before retrying
 
 if __name__ == '__main__':
     monitor = SSHMonitor()
@@ -375,7 +379,8 @@ main() {
 
     # Install required packages
     PACKAGES=(
-        python3-full
+        python3
+        python3-pip
         python3-venv
         python3-dev
         build-essential
