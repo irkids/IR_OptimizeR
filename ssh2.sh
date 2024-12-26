@@ -78,20 +78,26 @@ setup_python_env() {
     # shellcheck disable=SC1090
     source "${VENV_PATH}/bin/activate"
     
+    # First install numpy with specific version to avoid conflicts
+    pip install --no-cache-dir numpy==1.24.3
+    
     # Install advanced Python packages for optimization
     pip install --no-cache-dir \
         paramiko \
         sshtunnel \
         psutil \
-        numpy \
         pandas \
         scikit-learn \
-        tensorflow-cpu \
+        tensorflow-lite \
         pyroute2 \
         netaddr \
         pytest \
         python-daemon
+
+    # Verify numpy version
+    python3 -c "import numpy; print('Numpy version:', numpy.__version__)"
 }
+
 
 # Network optimization using advanced metrics
 optimize_network() {
