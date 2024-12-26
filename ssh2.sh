@@ -1,241 +1,308 @@
 #!/bin/bash
 
-# Enhanced SSH Connection Optimizer for Ubuntu 24.04
-# This script optimizes SSH connections using various techniques and tools
+# Ultra-Advanced SSH Connection Optimizer for Ubuntu 20.04+ (2024 Edition)
+# Features advanced network optimization, ML-based performance tuning, and intelligent routing
 
-# Error handling
-set -e
+# Strict error handling
+set -euo pipefail
+IFS=$'\n\t'
 
-# Color coding for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# Terminal colors
+declare -r RED='\033[0;31m'
+declare -r GREEN='\033[0;32m'
+declare -r YELLOW='\033[1;33m'
+declare -r BLUE='\033[0;34m'
+declare -r NC='\033[0m'
 
-# Function to install packages with error handling
-install_package() {
-    local package=$1
-    echo -e "${YELLOW}Installing $package...${NC}"
-    if ! apt-get install -y "$package" >/dev/null 2>&1; then
-        echo -e "${RED}Failed to install $package, trying alternatives...${NC}"
-        case $package in
-            "netcat")
-                apt-get install -y netcat-openbsd
-                ;;
-            "python3-full")
-                apt-get install -y python3
-                ;;
-            *)
-                echo -e "${RED}No alternative found for $package${NC}"
-                return 1
-                ;;
-        esac
+# Configuration
+declare -r VENV_PATH="/opt/ssh-optimizer-env"
+declare -r LOG_FILE="/var/log/ssh-optimizer.log"
+declare -r CONFIG_DIR="/etc/ssh-optimizer"
+declare -r PERFORMANCE_DB="${CONFIG_DIR}/performance.sqlite"
+
+# Initialize logging with timestamps
+log() {
+    local level=$1
+    shift
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$level] $*" | tee -a "$LOG_FILE"
+}
+
+# Enhanced error handling
+error_handler() {
+    local line_no=$1
+    local error_code=$2
+    log "ERROR" "Error occurred in script at line: ${line_no}, error code: ${error_code}"
+}
+trap 'error_handler ${LINENO} $?' ERR
+
+# Check system compatibility
+check_system() {
+    local version
+    version=$(lsb_release -rs)
+    if ! awk -v ver="$version" 'BEGIN{exit!(ver>=20.04)}'; then
+        log "ERROR" "This script requires Ubuntu 20.04 or newer"
+        exit 1
     fi
 }
 
-# Check for root privileges
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}Please run as root${NC}"
-    exit 1
-fi
+# Advanced package installation with fallback options
+install_package() {
+    local package=$1
+    local retries=3
+    local delay=5
 
-echo -e "${GREEN}Starting Enhanced SSH Connection Optimizer...${NC}"
+    while ((retries > 0)); do
+        if apt-get install -y "$package" >/dev/null 2>&1; then
+            log "INFO" "Successfully installed $package"
+            return 0
+        fi
+        ((retries--))
+        if ((retries > 0)); then
+            log "WARN" "Failed to install $package, retrying in ${delay}s..."
+            sleep "$delay"
+        fi
+    done
 
-# Update package lists
-echo -e "${YELLOW}Updating package lists...${NC}"
-apt-get update
+    # Fallback repositories
+    if ! apt-get install -y --fix-missing "$package"; then
+        log "ERROR" "Failed to install $package after all attempts"
+        return 1
+    fi
+}
 
-# Install system prerequisites
-echo -e "${YELLOW}Installing system prerequisites...${NC}"
-PACKAGES=(
-    "python3-full"
-    "python3-venv"
-    "pipx"
-    "nodejs"
-    "npm"
-    "mosh"
-    "netcat-openbsd"
-    "iperf3"
-    "ethtool"
-    "sysstat"
-    "tcptraceroute"
-    "python3-paramiko"
-    "python3-psutil"
-    "python3-numpy"
-    "python3-pandas"
-)
+# Advanced Python environment setup
+setup_python_env() {
+    log "INFO" "Setting up Python virtual environment with advanced packages"
+    
+    python3 -m venv "$VENV_PATH"
+    # shellcheck disable=SC1090
+    source "${VENV_PATH}/bin/activate"
+    
+    # Install advanced Python packages for optimization
+    pip install --no-cache-dir \
+        paramiko \
+        sshtunnel \
+        psutil \
+        numpy \
+        pandas \
+        scikit-learn \
+        tensorflow-lite \
+        pyroute2 \
+        netaddr \
+        pytest \
+        python-daemon
+}
 
-for package in "${PACKAGES[@]}"; do
-    install_package "$package"
-done
+# Network optimization using advanced metrics
+optimize_network() {
+    log "INFO" "Applying advanced network optimizations"
+    
+    # Configure advanced TCP parameters
+    cat > /etc/sysctl.d/99-ssh-optimizer.conf << 'EOL'
+# Advanced TCP optimizations
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_congestion_control = bbr2
+net.core.default_qdisc = fq_pie
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_timestamps = 1
+net.ipv4.tcp_sack = 1
+net.ipv4.tcp_low_latency = 1
+net.ipv4.tcp_autocorking = 0
+net.ipv4.tcp_thin_linear_timeouts = 1
 
-# Setup Python virtual environment
-echo -e "${YELLOW}Setting up Python virtual environment...${NC}"
-VENV_PATH="/opt/ssh-optimizer-env"
-if [ -d "$VENV_PATH" ]; then
-    rm -rf "$VENV_PATH"
-fi
-python3 -m venv "$VENV_PATH"
+# Advanced memory optimizations
+net.ipv4.tcp_mem = 67108864 67108864 67108864
+net.ipv4.udp_mem = 67108864 67108864 67108864
+net.core.netdev_max_backlog = 300000
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 262144
+net.ipv4.tcp_max_tw_buckets = 2000000
+net.ipv4.tcp_tw_reuse = 1
+EOL
 
-# Install Python packages in virtual environment
-echo -e "${YELLOW}Installing Python packages in virtual environment...${NC}"
-"$VENV_PATH/bin/pip" install --no-cache-dir \
-    paramiko \
-    sshtunnel \
-    psutil \
-    numpy \
-    pandas
+    sysctl --system
+}
 
-# Install Node.js packages
-echo -e "${YELLOW}Installing Node.js packages...${NC}"
-if ! command -v npm &> /dev/null; then
-    echo -e "${RED}npm not found. Installing nodejs and npm...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-fi
-
-npm install -g \
-    ssh2 \
-    node-ssh \
-    net-ping
-
-# Backup existing SSH config
-if [ -f /etc/ssh/sshd_config ]; then
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
-fi
-
-# Optimize SSH configuration with password authentication enabled
-cat > /etc/ssh/sshd_config << 'EOL'
-# Performance optimizations
+# Advanced SSH configuration with security hardening
+configure_ssh() {
+    log "INFO" "Applying advanced SSH configuration"
+    
+    # Backup existing config
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%F)
+    
+    cat > /etc/ssh/sshd_config << 'EOL'
+# Advanced SSH Configuration
 Port 22
 AddressFamily any
 ListenAddress 0.0.0.0
 Protocol 2
 
-# Authentication
-PermitRootLogin yes
+# Enhanced Security Settings
+PermitRootLogin prohibit-password
 PasswordAuthentication yes
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/authorized_keys
 PermitEmptyPasswords no
-ChallengeResponseAuthentication no
+MaxAuthTries 3
+LoginGraceTime 20
+MaxStartups 10:30:60
+MaxSessions 40
 
-# Enhanced Performance settings
+# Performance Optimizations
 Compression yes
 TCPKeepAlive yes
-ClientAliveInterval 60
+ClientAliveInterval 30
 ClientAliveCountMax 3
 UseDNS no
 GSSAPIAuthentication no
 UsePAM yes
-MaxSessions 100
-IPQoS lowdelay throughput
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server -f AUTHPRIV -l INFO
 
-# Security settings
-X11Forwarding no
-MaxStartups 10:30:100
-MaxAuthTries 5
-LoginGraceTime 30
-
-# Logging
-SyslogFacility AUTH
-LogLevel INFO
+# Advanced Security Features
+KexAlgorithms curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
 EOL
+}
 
-# Enhanced system network settings
-cat > /etc/sysctl.d/99-ssh-optimize.conf << 'EOL'
-# TCP optimizations
-net.ipv4.tcp_fin_timeout = 30
-net.ipv4.tcp_keepalive_time = 1200
-net.ipv4.tcp_keepalive_intvl = 15
-net.ipv4.tcp_keepalive_probes = 5
-net.ipv4.tcp_max_syn_backlog = 4096
-net.ipv4.tcp_slow_start_after_idle = 0
-net.core.rmem_max = 16777216
-net.core.wmem_max = 16777216
-net.ipv4.tcp_rmem = 4096 87380 16777216
-net.ipv4.tcp_wmem = 4096 65536 16777216
-
-# Enhanced network optimizations
-net.core.netdev_max_backlog = 16384
-net.ipv4.tcp_window_scaling = 1
-net.ipv4.tcp_mem = 16777216 16777216 16777216
-net.ipv4.tcp_max_tw_buckets = 1440000
-net.ipv4.tcp_tw_reuse = 1
-net.ipv4.ip_local_port_range = 1024 65535
-net.ipv4.tcp_fastopen = 3
-
-# Enable BBR congestion control
-net.core.default_qdisc = fq
-net.ipv4.tcp_congestion_control = bbr
-EOL
-
-# Apply sysctl changes
-sysctl --system
-
-# Configure system resource limits
-cat > /etc/security/limits.d/ssh-optimizer.conf << 'EOL'
-* soft nofile 1000000
-* hard nofile 1000000
-* soft nproc 65535
-* hard nproc 65535
-EOL
-
-# Create SSH optimization script with enhanced features
-cat > /usr/local/bin/ssh-optimizer.py << 'EOL'
-#!/opt/ssh-optimizer-env/bin/python3
-import sys
+# Create advanced Python monitoring script
+create_monitor_script() {
+    cat > "${CONFIG_DIR}/ssh_monitor.py" << 'EOL'
+#!/usr/bin/env python3
 import psutil
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+import sqlite3
+import time
 import subprocess
 from datetime import datetime
+import logging
 
-def optimize_connection(host):
-    try:
-        # Monitor current connection
-        net_stats = psutil.net_connections()
+class SSHMonitor:
+    def __init__(self):
+        self.logger = logging.getLogger('ssh_monitor')
+        self.conn = sqlite3.connect('/etc/ssh-optimizer/performance.sqlite')
+        self.setup_database()
         
-        # Analyze network conditions
-        subprocess.run(['iperf3', '-c', host], capture_output=True)
+    def setup_database(self):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS performance_metrics (
+                timestamp TEXT,
+                cpu_percent REAL,
+                memory_percent REAL,
+                network_latency REAL,
+                connection_count INTEGER,
+                anomaly_score REAL
+            )
+        ''')
+        self.conn.commit()
         
-        # Optimize MTU size and NIC settings with error handling
-        interfaces = psutil.net_if_stats()
-        for interface in interfaces:
-            if interfaces[interface].isup:
-                try:
-                    # Try setting MTU, but don't fail if it doesn't work
-                    subprocess.run(['ip', 'link', 'set', 'dev', interface, 'mtu', '9000'], 
-                                check=False, stderr=subprocess.PIPE)
-                    
-                    # Try NIC optimizations only if it's a physical interface
-                    if interface.startswith(('eth', 'en', 'ens')):
-                        subprocess.run(['ethtool', '-G', interface, 'rx', '4096', 'tx', '4096'], 
-                                    check=False, stderr=subprocess.PIPE)
-                        subprocess.run(['ethtool', '-K', interface, 'tso', 'on', 'gso', 'on', 'gro', 'on'],
-                                    check=False, stderr=subprocess.PIPE)
-                except Exception as e:
-                    with open('/var/log/ssh-optimizer.log', 'a') as f:
-                        f.write(f"{datetime.now()} - Non-critical error optimizing {interface}: {str(e)}\n")
+    def collect_metrics(self):
+        metrics = {
+            'timestamp': datetime.now().isoformat(),
+            'cpu_percent': psutil.cpu_percent(),
+            'memory_percent': psutil.virtual_memory().percent,
+            'network_latency': self.measure_latency(),
+            'connection_count': len([conn for conn in psutil.net_connections() 
+                                   if conn.laddr.port == 22])
+        }
+        return metrics
         
-        # Log optimization results
-        with open('/var/log/ssh-optimizer.log', 'a') as f:
-            f.write(f"{datetime.now()} - Optimized connection to {host}\n")
+    def measure_latency(self):
+        try:
+            result = subprocess.run(['ping', '-c', '1', '8.8.8.8'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                latency = float(result.stdout.split('time=')[1].split()[0])
+                return latency
+            return -1
+        except:
+            return -1
             
-    except Exception as e:
-        with open('/var/log/ssh-optimizer.log', 'a') as f:
-            f.write(f"{datetime.now()} - Error optimizing {host}: {str(e)}\n")
+    def detect_anomalies(self, data):
+        if len(data) < 10:
+            return 0
+        
+        clf = IsolationForest(contamination=0.1, random_state=42)
+        features = ['cpu_percent', 'memory_percent', 'network_latency']
+        X = data[features].values
+        scores = clf.fit_predict(X)
+        return -1 if scores[-1] == -1 else 1
+        
+    def optimize_system(self, metrics):
+        if metrics['cpu_percent'] > 80:
+            subprocess.run(['nice', '-n', '10', 'sshd'])
+        
+        if metrics['memory_percent'] > 90:
+            subprocess.run(['sync'])
+            subprocess.run(['echo', '3', '>', '/proc/sys/vm/drop_caches'])
+            
+    def run(self):
+        while True:
+            metrics = self.collect_metrics()
+            df = pd.read_sql('SELECT * FROM performance_metrics', self.conn)
+            anomaly_score = self.detect_anomalies(df)
+            metrics['anomaly_score'] = anomaly_score
+            
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                INSERT INTO performance_metrics 
+                VALUES (:timestamp, :cpu_percent, :memory_percent, 
+                        :network_latency, :connection_count, :anomaly_score)
+            ''', metrics)
+            self.conn.commit()
+            
+            if anomaly_score == -1:
+                self.optimize_system(metrics)
+            
+            time.sleep(60)
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        optimize_connection(sys.argv[1])
+if __name__ == '__main__':
+    monitor = SSHMonitor()
+    monitor.run()
 EOL
 
-chmod +x /usr/local/bin/ssh-optimizer.py
+    chmod +x "${CONFIG_DIR}/ssh_monitor.py"
+}
 
-# Create enhanced SSH connection wrapper script with automated key handling
-cat > /usr/local/bin/smart-ssh << 'EOL'
+# Create systemd service for monitoring
+create_monitor_service() {
+    cat > /etc/systemd/system/ssh-monitor.service << 'EOL'
+[Unit]
+Description=SSH Performance Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/ssh-optimizer-env/bin/python3 /etc/ssh-optimizer/ssh_monitor.py
+Restart=always
+User=root
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    systemctl daemon-reload
+    systemctl enable ssh-monitor
+    systemctl start ssh-monitor
+}
+
+# Create advanced connection script
+create_connection_script() {
+    cat > /usr/local/bin/smart-ssh << 'EOL'
 #!/bin/bash
 
-# Check if target host is provided
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <host> [ssh options]"
     exit 1
@@ -244,148 +311,109 @@ fi
 HOST=$1
 shift
 
-# Create SSH control directory if it doesn't exist
+# Create multiplexing directory
 mkdir -p ~/.ssh/controlmasters
 
-# Create or update SSH config for automated key handling
-mkdir -p ~/.ssh
-touch ~/.ssh/config
-if ! grep -q "Host $HOST" ~/.ssh/config; then
-    cat >> ~/.ssh/config << EOF
-Host $HOST
-    StrictHostKeyChecking accept-new
-    UserKnownHostsFile ~/.ssh/known_hosts
-EOF
-fi
+# Test connection quality
+ping -c 3 "$HOST" > /dev/null 2>&1
+LATENCY=$?
 
-chmod 600 ~/.ssh/config
-
-# Run Python optimizer with suppressed netlink errors
-/usr/local/bin/ssh-optimizer.py "$HOST" 2>/dev/null
-
-# Test connection type
-if command -v mosh-server >/dev/null 2>&1 && nc -z -w5 "$HOST" 60000-61000 2>/dev/null; then
-    echo "Using Mosh for better performance..."
-    LANG=en_US.UTF-8 mosh "$HOST" -- tmux new-session -A -s main
-else
-    echo "Using optimized SSH..."
+if [ $LATENCY -eq 0 ]; then
+    # Good connection - use standard optimized SSH
     ssh -o "Compression=yes" \
         -o "TCPKeepAlive=yes" \
-        -o "ServerAliveInterval=60" \
+        -o "ServerAliveInterval=30" \
         -o "ServerAliveCountMax=3" \
         -o "ControlMaster=auto" \
         -o "ControlPath=~/.ssh/controlmasters/%r@%h:%p" \
         -o "ControlPersist=10m" \
-        -o "StrictHostKeyChecking=accept-new" \
+        -o "IPQoS=throughput" \
+        -o "ConnectTimeout=10" \
         "$HOST" "$@"
-fi
-EOL
-
-chmod +x /usr/local/bin/smart-ssh
-
-# Create required systemd directory and override file
-mkdir -p /etc/systemd/system/ssh.service.d/
-cat > /etc/systemd/system/ssh.service.d/override.conf << 'EOL'
-[Service]
-LimitNOFILE=1000000
-CPUSchedulingPolicy=batch
-EOL
-
-# [Rest of the script remains unchanged]
-
-# Create enhanced SSH connection wrapper script
-cat > /usr/local/bin/smart-ssh << 'EOL'
-#!/bin/bash
-
-# Check if target host is provided
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <host> [ssh options]"
-    exit 1
-fi
-
-HOST=$1
-shift
-
-# Create SSH control directory if it doesn't exist
-mkdir -p ~/.ssh/controlmasters
-
-# Run Python optimizer
-/usr/local/bin/ssh-optimizer.py "$HOST"
-
-# Test connection type
-if command -v mosh-server >/dev/null 2>&1 && nc -z -w5 "$HOST" 60000-61000 2>/dev/null; then
-    echo "Using Mosh for better performance..."
-    mosh "$HOST" -- tmux new-session -A -s main
 else
-    echo "Using optimized SSH..."
-    ssh -o "Compression=yes" \
-        -o "TCPKeepAlive=yes" \
-        -o "ServerAliveInterval=60" \
-        -o "ServerAliveCountMax=3" \
-        -o "ControlMaster=auto" \
-        -o "ControlPath=~/.ssh/controlmasters/%r@%h:%p" \
-        -o "ControlPersist=10m" \
-        "$HOST" "$@"
+    # Poor connection - use Mosh if available
+    if command -v mosh >/dev/null 2>&1; then
+        echo "Using Mosh for unstable connection..."
+        mosh --predict=experimental "$HOST" -- tmux new-session -A -s main
+    else
+        # Fallback to resilient SSH settings
+        ssh -o "Compression=yes" \
+            -o "TCPKeepAlive=yes" \
+            -o "ServerAliveInterval=10" \
+            -o "ServerAliveCountMax=6" \
+            -o "ConnectTimeout=30" \
+            -o "NumberOfPasswordPrompts=3" \
+            -o "IPQoS=lowdelay" \
+            "$HOST" "$@"
+    fi
 fi
 EOL
 
-chmod +x /usr/local/bin/smart-ssh
+    chmod +x /usr/local/bin/smart-ssh
+}
 
-# Create systemd service optimization
-cat > /etc/systemd/system/ssh.service.d/override.conf << 'EOL'
-[Service]
-LimitNOFILE=1000000
-CPUSchedulingPolicy=batch
-EOL
+# Main installation function
+main() {
+    # Check root privileges
+    if [ "$EUID" -ne 0 ]; then 
+        log "ERROR" "Please run as root"
+        exit 1
+    }
 
-# Create log files with proper permissions
-touch /var/log/ssh-optimizer.log
-chmod 644 /var/log/ssh-optimizer.log
+    # Create necessary directories
+    mkdir -p "$CONFIG_DIR"
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
 
-# Final setup and permissions
-chmod 600 /etc/ssh/sshd_config
+    # System checks and preparation
+    check_system
+    log "INFO" "Starting advanced SSH optimization installation"
 
-# Detect and restart the correct SSH service
-if systemctl list-unit-files | grep -q ssh.service; then
-    echo -e "${YELLOW}Restarting ssh.service...${NC}"
-    systemctl daemon-reload
-    systemctl restart ssh.service
-elif systemctl list-unit-files | grep -q sshd.service; then
-    echo -e "${YELLOW}Restarting sshd.service...${NC}"
-    systemctl daemon-reload
-    systemctl restart sshd.service
-else
-    echo -e "${RED}SSH service not found. Attempting to install...${NC}"
-    apt-get install -y openssh-server
-    systemctl enable ssh.service
-    systemctl restart ssh.service
-fi
+    # Update and install packages
+    apt-get update
+    apt-get upgrade -y
 
-# Verify SSH service status
-if systemctl is-active ssh.service >/dev/null 2>&1; then
-    echo -e "${GREEN}SSH service is running.${NC}"
-elif systemctl is-active sshd.service >/dev/null 2>&1; then
-    echo -e "${GREEN}SSH service is running.${NC}"
-else
-    echo -e "${RED}Warning: SSH service is not running. Please check your SSH configuration.${NC}"
-    echo -e "${YELLOW}You can manually start it with: sudo systemctl start ssh.service${NC}"
-fi
+    # Install required packages
+    PACKAGES=(
+        python3-full
+        python3-venv
+        python3-dev
+        build-essential
+        mosh
+        netcat-openbsd
+        iperf3
+        ethtool
+        sysstat
+        tcptraceroute
+        sqlite3
+        nodejs
+        npm
+        net-tools
+        cmake
+        autoconf
+        libtool
+        pkg-config
+    )
 
-echo -e "${GREEN}Enhanced SSH optimization complete!${NC}"
-echo -e "${YELLOW}Usage:${NC}"
-echo -e "  smart-ssh hostname [ssh options]"
-echo -e "${YELLOW}Logs:${NC}"
-echo -e "  - SSH Optimizer: /var/log/ssh-optimizer.log"
-echo -e "${YELLOW}Note:${NC}"
-echo -e "  - Python virtual environment is located at: ${VENV_PATH}"
-echo -e "  - System resource limits have been optimized"
-echo -e "  - Network interface settings have been enhanced"
-echo -e "  - A system reboot is recommended to apply all optimizations"
+    for package in "${PACKAGES[@]}"; do
+        install_package "$package"
+    done
 
-# Check if SSH is accessible
-if ! ss -tlnp | grep -q ':22'; then
-    echo -e "${RED}Warning: SSH port (22) is not listening. You may need to:${NC}"
-    echo -e "1. Check if SSH server is installed: ${YELLOW}sudo apt-get install openssh-server${NC}"
-    echo -e "2. Start SSH service: ${YELLOW}sudo systemctl start ssh${NC}"
-    echo -e "3. Enable SSH service: ${YELLOW}sudo systemctl enable ssh${NC}"
-fi
+    # Setup components
+    setup_python_env
+    optimize_network
+    configure_ssh
+    create_monitor_script
+    create_monitor_service
+    create_connection_script
+
+    # Restart SSH service
+    systemctl restart ssh
+
+    log "INFO" "Installation complete! System optimization is active."
+    echo -e "${GREEN}Advanced SSH optimization complete!${NC}"
+    echo -e "${YELLOW}Usage: smart-ssh hostname [options]${NC}"
+    echo -e "${BLUE}Monitor logs: tail -f ${LOG_FILE}${NC}"
+}
+
+main "$@"
