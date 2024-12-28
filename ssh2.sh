@@ -239,22 +239,6 @@ optimize_network() {
     # Dynamic buffer calculation based on network speed
     local optimal_buffer=$((interface_speed * 1024 * 128))  # 128KB per Mb/s
     
-    # Check available congestion control algorithms
-    local congestion_control="cubic"  # Default to cubic
-    if grep -q "bbr" /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
-        congestion_control="bbr"
-    elif grep -q "htcp" /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
-        congestion_control="htcp"
-    fi
-    
-    # Check available qdiscs
-    local qdisc="fq"  # Default to fq
-    if tc qdisc show dev "$interface" 2>/dev/null | grep -q "fq_codel"; then
-        qdisc="fq_codel"
-    elif tc qdisc show dev "$interface" 2>/dev/null | grep -q "fq_pie"; then
-        qdisc="fq_pie"
-    fi
-    
     # Configure advanced TCP parameters with dynamic values
     cat > /etc/sysctl.d/99-ssh-optimizer.conf << EOL
 # Advanced TCP optimizations
@@ -263,8 +247,8 @@ net.core.wmem_max = ${optimal_buffer}
 net.ipv4.tcp_rmem = 4096 87380 ${optimal_buffer}
 net.ipv4.tcp_wmem = 4096 65536 ${optimal_buffer}
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_congestion_control = ${congestion_control}
-net.core.default_qdisc = ${qdisc}
+net.ipv4.tcp_congestion_control = bbr2
+net.core.default_qdisc = fq_pie
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_notsent_lowat = 16384
@@ -291,9 +275,10 @@ net.core.optmem_max = 65536
 net.ipv4.tcp_rfc1337 = 1
 EOL
 
-    # Apply sysctl settings with error handling
-    if ! sysctl --system > /dev/null 2>&1; then
-        log "WARN" "Some sysctl settings could not be applied, continuing with best effort"
+    # Apply sysctl settings
+    if ! sysctl --system; then
+        log "ERROR" "Failed to apply sysctl settings"
+        return 1
     fi
     
     # Configure network interface optimizations
@@ -301,8 +286,6 @@ EOL
         ethtool -K "$interface" tso on gso on gro on 2>/dev/null || true
         ethtool -G "$interface" rx 4096 tx 4096 2>/dev/null || true
     fi
-    
-    return 0  # Return success even with warnings to allow script to continue
 }
 
 # Advanced SSH configuration with security hardening and version-specific settings
@@ -887,6 +870,170 @@ chmod +x "${CONFIG_DIR}/tools/monitor-connections.sh"
     ln -sf "${CONFIG_DIR}/tools/monitor-connections.sh" /usr/local/bin/ssh-monitor-connections
 }
 
+# Function to Implement smart-ssh features directly in SSH
+implement_smart_ssh_features() {
+    log "INFO" "Implementing smart-ssh features directly in system SSH configuration"
+    
+    # Back up original SSH config
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%F)
+    
+    # Create SSH client config directory if it doesn't exist
+    mkdir -p /etc/ssh/ssh_config.d
+
+    # Create global SSH client configuration
+    cat > /etc/ssh/ssh_config.d/10-optimized.conf << 'EOL'
+# Global SSH Client Optimizations
+Host *
+    # Connection multiplexing
+    ControlMaster auto
+    ControlPath ~/.ssh/controlmasters/%r@%h:%p
+    ControlPersist 10m
+
+    # Performance optimizations
+    Compression yes
+    TCPKeepAlive yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    
+    # Connection settings
+    ConnectTimeout 10
+    ConnectionAttempts 3
+    
+    # TCP forwarding and tunneling
+    ExitOnForwardFailure yes
+    
+    # Roaming and connection persistence
+    TCPRcvBufSize 1048576
+    TCPSndBufSize 1048576
+    
+    # Security with performance
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+    KexAlgorithms curve25519-sha256@libssh.org,curve25519-sha256,diffie-hellman-group16-sha512
+    
+    # Reuse connections
+    IPQoS throughput
+    
+    # Enable all compression
+    Compression delayed
+EOL
+
+    # Create controlmasters directory in default location
+    mkdir -p /etc/skel/.ssh/controlmasters
+    chmod 700 /etc/skel/.ssh/controlmasters
+
+    # Create controlmasters directory for root
+    mkdir -p /root/.ssh/controlmasters
+    chmod 700 /root/.ssh/controlmasters
+
+    # Add auto-optimization to sshd_config
+    cat >> /etc/ssh/sshd_config << 'EOL'
+
+# Auto-optimization settings
+MaxSessions 100
+MaxStartups 100:30:200
+TCPKeepAlive yes
+ClientAliveInterval 30
+ClientAliveCountMax 3
+Compression delayed
+IPQoS throughput
+
+# Advanced TCP settings
+UseDNS no
+GSSAPIAuthentication no
+UsePAM yes
+PrintMotd no
+X11Forwarding no
+PermitTunnel yes
+EOL
+
+    # Create directory for connection monitoring
+    mkdir -p /var/log/ssh-connections
+
+    # Create connection monitoring script
+    cat > /usr/local/bin/ssh-connection-monitor << 'EOL'
+#!/bin/bash
+
+LOG_FILE="/var/log/ssh-connections/monitor.log"
+STATS_FILE="/var/log/ssh-connections/stats.log"
+
+# Ensure log directory exists
+mkdir -p "$(dirname "$LOG_FILE")"
+
+while true; do
+    # Log current connections
+    echo "=== $(date) ===" >> "$LOG_FILE"
+    ss -tn state established '( dport = :22 or sport = :22 )' >> "$LOG_FILE"
+    
+    # Collect statistics
+    CONN_COUNT=$(ss -tn state established '( dport = :22 or sport = :22 )' | wc -l)
+    LOAD=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}')
+    MEM=$(free | awk '/Mem:/ {printf "%.2f", $3/$2 * 100}')
+    
+    # Log statistics
+    echo "$(date +%s),$CONN_COUNT,$LOAD,$MEM" >> "$STATS_FILE"
+    
+    # Optimize based on current usage
+    if [ "$CONN_COUNT" -gt 50 ] || [ "${LOAD%.*}" -gt 5 ]; then
+        # Apply aggressive optimizations
+        sysctl -w net.ipv4.tcp_fin_timeout=15
+        sysctl -w net.ipv4.tcp_keepalive_time=300
+    else
+        # Reset to normal values
+        sysctl -w net.ipv4.tcp_fin_timeout=60
+        sysctl -w net.ipv4.tcp_keepalive_time=7200
+    fi
+    
+    sleep 60
+done
+EOL
+
+    chmod +x /usr/local/bin/ssh-connection-monitor
+
+    # Create systemd service for connection monitoring
+    cat > /etc/systemd/system/ssh-connection-monitor.service << 'EOL'
+[Unit]
+Description=SSH Connection Monitor and Auto-Optimizer
+After=network.target sshd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ssh-connection-monitor
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    # Enable and start the monitoring service
+    systemctl daemon-reload
+    systemctl enable ssh-connection-monitor
+    systemctl start ssh-connection-monitor
+
+    # Create SSH optimization cron job
+    cat > /etc/cron.d/ssh-optimizer << 'EOL'
+# Run SSH optimization every hour
+0 * * * * root /usr/sbin/sysctl -p /etc/sysctl.d/99-ssh-optimizer.conf >/dev/null 2>&1
+EOL
+
+    # Update PAM limits for SSH sessions
+    cat > /etc/security/limits.d/ssh.conf << 'EOL'
+# Increase limits for SSH sessions
+*               soft    nofile          65535
+*               hard    nofile          65535
+*               soft    nproc           65535
+*               hard    nproc           65535
+EOL
+
+    # Restart SSH service to apply changes
+    systemctl restart sshd
+
+    log "INFO" "Smart SSH features have been integrated into system SSH configuration"
+    echo "SSH optimization is now active for all SSH connections"
+    echo "Monitor connection statistics in /var/log/ssh-connections/"
+}
+
 # Main installation function with comprehensive system checks
 main() {
     # Check root privileges
@@ -981,6 +1128,11 @@ main() {
     
     install_monitoring_tools || {
         log "WARN" "Failed to install some monitoring tools"
+    }
+	
+# Implement_smart_ssh_features
+        implement_smart_ssh_features || {
+        log "WARN" "Failed to implement some smart-ssh features, continuing with basic optimization"
     }
 
 # Restart SSH service
