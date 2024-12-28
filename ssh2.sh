@@ -868,8 +868,7 @@ main() {
     if [ "$EUID" -ne 0 ]; then 
         log "ERROR" "Please run as root"
         exit 1
-    }
-
+    
     # Create necessary directories
     mkdir -p "$CONFIG_DIR"
     touch "$LOG_FILE"
