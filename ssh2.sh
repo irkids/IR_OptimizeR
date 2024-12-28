@@ -895,6 +895,16 @@ Host *
     ServerAliveInterval 30
     ServerAliveCountMax 3
     
+	# Authentication settings
+    PreferredAuthentications password,keyboard-interactive
+    KbdInteractiveAuthentication yes
+    PasswordAuthentication yes
+    PubkeyAuthentication yes
+    
+    # Disable unwanted authentication methods
+    GSSAPIAuthentication no
+    ChallengeResponseAuthentication no
+	
     # Connection settings
     ConnectTimeout 10
     ConnectionAttempts 3
@@ -937,6 +947,15 @@ ClientAliveInterval 30
 ClientAliveCountMax 3
 Compression delayed
 IPQoS throughput
+
+# Authentication settings
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+ChallengeResponseAuthentication no
+UsePAM yes
+
+# Clear authentication methods to use
+AuthenticationMethods password keyboard-interactive
 
 # Advanced TCP settings
 UseDNS no
