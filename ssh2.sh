@@ -968,7 +968,7 @@ main() {
     if ! systemctl is-active --quiet ssh; then
         log "ERROR" "SSH service is not running after configuration"
         exit 1
-    }
+    fi
 
     # Success message and usage instructions
     log "INFO" "Installation complete! System optimization is active."
