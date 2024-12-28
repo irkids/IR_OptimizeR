@@ -856,7 +856,7 @@ while true; do
 done
 EOL
 
-    chmod +x "${CONFIG_DIR}/tools/monitor-connections.sh"
+chmod +x "${CONFIG_DIR}/tools/monitor-connections.sh"
     
     # Create symlink in /usr/local/bin
     ln -sf "${CONFIG_DIR}/tools/monitor-connections.sh" /usr/local/bin/ssh-monitor-connections
@@ -868,12 +868,13 @@ main() {
     if [ "$EUID" -ne 0 ]; then 
         log "ERROR" "Please run as root"
         exit 1
-
+    fi
+    
     # Create necessary directories
     mkdir -p "$CONFIG_DIR"
     touch "$LOG_FILE"
     chmod 644 "$LOG_FILE"
-
+	
     # System checks and preparation
     check_system
     log "INFO" "Starting advanced SSH optimization installation"
