@@ -239,6 +239,22 @@ optimize_network() {
     # Dynamic buffer calculation based on network speed
     local optimal_buffer=$((interface_speed * 1024 * 128))  # 128KB per Mb/s
     
+    # Check available congestion control algorithms
+    local congestion_control="cubic"  # Default to cubic
+    if grep -q "bbr" /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+        congestion_control="bbr"
+    elif grep -q "htcp" /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+        congestion_control="htcp"
+    fi
+    
+    # Check available qdiscs
+    local qdisc="fq"  # Default to fq
+    if tc qdisc show dev "$interface" 2>/dev/null | grep -q "fq_codel"; then
+        qdisc="fq_codel"
+    elif tc qdisc show dev "$interface" 2>/dev/null | grep -q "fq_pie"; then
+        qdisc="fq_pie"
+    fi
+    
     # Configure advanced TCP parameters with dynamic values
     cat > /etc/sysctl.d/99-ssh-optimizer.conf << EOL
 # Advanced TCP optimizations
@@ -247,8 +263,8 @@ net.core.wmem_max = ${optimal_buffer}
 net.ipv4.tcp_rmem = 4096 87380 ${optimal_buffer}
 net.ipv4.tcp_wmem = 4096 65536 ${optimal_buffer}
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_congestion_control = bbr2
-net.core.default_qdisc = fq_pie
+net.ipv4.tcp_congestion_control = ${congestion_control}
+net.core.default_qdisc = ${qdisc}
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_notsent_lowat = 16384
@@ -275,10 +291,9 @@ net.core.optmem_max = 65536
 net.ipv4.tcp_rfc1337 = 1
 EOL
 
-    # Apply sysctl settings
-    if ! sysctl --system; then
-        log "ERROR" "Failed to apply sysctl settings"
-        return 1
+    # Apply sysctl settings with error handling
+    if ! sysctl --system > /dev/null 2>&1; then
+        log "WARN" "Some sysctl settings could not be applied, continuing with best effort"
     fi
     
     # Configure network interface optimizations
@@ -286,6 +301,8 @@ EOL
         ethtool -K "$interface" tso on gso on gro on 2>/dev/null || true
         ethtool -G "$interface" rx 4096 tx 4096 2>/dev/null || true
     fi
+    
+    return 0  # Return success even with warnings to allow script to continue
 }
 
 # Advanced SSH configuration with security hardening and version-specific settings
