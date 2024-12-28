@@ -219,14 +219,22 @@ optimize_network() {
     mem_total=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
     local max_wmem=$((mem_total * 1024 / 4))  # Use up to 25% of total memory
     
-    # Get network interface speed
+    # Get network interface speed with proper error handling
     local interface
     interface=$(ip route | awk '/default/ {print $5}' | head -n1)
-    local interface_speed
-    interface_speed=$(ethtool "$interface" 2>/dev/null | awk '/Speed:/ {print $2}' | sed 's/Mb\/s//')
+    if [[ -z "$interface" ]]; then
+        log "WARN" "Could not determine network interface, using defaults"
+        interface="eth0"
+    fi
     
-    # Default to 1000Mb/s if speed cannot be determined
-    interface_speed=${interface_speed:-1000}
+    local interface_speed
+    interface_speed=$(ethtool "$interface" 2>/dev/null | awk '/Speed:/ {print $2}' | sed 's/Mb\/s//' || echo "1000")
+    
+    # Ensure interface_speed is set and numeric
+    if ! [[ "$interface_speed" =~ ^[0-9]+$ ]]; then
+        log "WARN" "Could not determine interface speed, using default of 1000 Mbps"
+        interface_speed=1000
+    fi
     
     # Dynamic buffer calculation based on network speed
     local optimal_buffer=$((interface_speed * 1024 * 128))  # 128KB per Mb/s
@@ -958,7 +966,7 @@ main() {
         log "WARN" "Failed to install some monitoring tools"
     }
 
-    # Restart SSH service
+# Restart SSH service
     systemctl restart ssh || {
         log "ERROR" "Failed to restart SSH service"
         exit 1
@@ -982,5 +990,4 @@ main() {
     echo "3. Check logs regularly for optimization insights"
     echo "4. Run 'ss -tn state established \"( dport = :22 or sport = :22 )\"' to verify connections"
 }
-
 main "$@"
