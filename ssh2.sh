@@ -310,47 +310,60 @@ configure_ssh() {
     fi
     
     cat > /etc/ssh/sshd_config << EOL
-# Advanced SSH Configuration
+# Basic SSH daemon configuration
 Port 22
-AddressFamily any
-ListenAddress 0.0.0.0
 Protocol 2
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
 
-# Enhanced Security Settings
-PermitRootLogin prohibit-password
+# Authentication settings
+PermitRootLogin yes
 PasswordAuthentication yes
-PubkeyAuthentication yes
 PermitEmptyPasswords no
-MaxAuthTries 3
-LoginGraceTime 20
-MaxStartups 10:30:60
-MaxSessions 40
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+UsePAM yes
 
-# Performance Optimizations
-Compression yes
+# Connection settings
 TCPKeepAlive yes
 ClientAliveInterval 30
 ClientAliveCountMax 3
-UseDNS no
-GSSAPIAuthentication no
-UsePAM yes
-PrintMotd no
-AcceptEnv LANG LC_*
-Subsystem sftp /usr/lib/openssh/sftp-server -f AUTHPRIV -l INFO
+MaxSessions 100
+MaxStartups 10:30:100
 
-# Advanced Security Features
+# Advanced Security Settings
 KexAlgorithms ${kex_algorithms}
 Ciphers ${ciphers}
 MACs ${macs}
 
-# Additional hardening
+# Security settings
 X11Forwarding no
-AllowAgentForwarding yes
-AllowTcpForwarding yes
-PrintLastLog yes
-IgnoreRhosts yes
-HostbasedAuthentication no
-StrictModes yes
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Performance settings
+Compression delayed
+UseDNS no
+GSSAPIAuthentication no
+EOL
+
+    # Create global SSH client configuration
+    mkdir -p /etc/ssh/ssh_config.d
+    cat > /etc/ssh/ssh_config.d/10-optimized.conf << EOL
+Host *
+    PasswordAuthentication yes
+    PubkeyAuthentication yes
+    ChallengeResponseAuthentication no
+    KbdInteractiveAuthentication no
+    GSSAPIAuthentication no
+    
+    # Connection settings
+    Compression yes
+    TCPKeepAlive yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
 EOL
 
     # Test configuration
@@ -359,6 +372,9 @@ EOL
         mv /etc/ssh/sshd_config.backup.$(date +%F) /etc/ssh/sshd_config
         return 1
     fi
+
+    # Restart SSH service to apply changes
+    systemctl restart sshd
 }
 
 # Create advanced Python monitoring script with enhanced metrics
